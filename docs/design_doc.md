@@ -1,38 +1,29 @@
-# Vector Database Implementation Notes for Claude Desktop Plugin
-(Updated with Contextual Retrieval Implementation)
+# Eidetic - Claude Memory extender
+
+## Motivation
+
+I dont like reading files via filesystem and I think the graph memory plugin is bad.
+
+I want something vector based for 2 purposes:
+
+1. RAG chat over large personal document datasets
+
+2. making a better version of chatgpt "Memory" feature. 
+a. have a 'memory' text document
+b. keep updated - no need to chunk it, , but we can add context
+3. query it automatically with EVERY chat? or at least let claude do 'remember' as a command, which runs the
+search algo on the memory document. 
+System prompts can encourage it to use memory frequently.
+ 
+Inspired by: https://www.anthropic.com/news/contextual-retrieval
+and reddit posts asking for an MCP pinecone plugin
+
+support for pinecone may come later, this is QDrant for now
+add more DB support later
 
 ## Vector Database Selection
 
-### Requirements
-1. Must support local deployment
-2. Must support hybrid search (both vector similarity and text/BM25)
-3. Python client library
-4. Production-ready and well-maintained
-
-### Hybrid Search Capabilities
-There are two approaches to implementing hybrid search:
-
-1. **Single Hybrid-Capable DB**
-   - Pros:
-     - Simpler architecture
-     - Fewer moving parts
-     - Easier deployment
-     - Single point of maintenance
-   - Cons:
-     - Less control over search algorithms
-     - May be less tunable
-
-2. **Separate Specialized DBs**
-   - Pros:
-     - More control over each search type
-     - Can tune each independently
-   - Cons:
-     - More complex architecture
-     - Need to maintain multiple systems
-     - More challenging deployment
-
-### Selected Approach
-For the Claude Desktop plugin, we'll use a single hybrid-capable vector database to minimize complexity. Top candidates:
+Probably QDrant because
 
 - **Qdrant**
   - Rust-based, excellent performance
@@ -40,29 +31,22 @@ For the Claude Desktop plugin, we'll use a single hybrid-capable vector database
   - Local deployment via file-based storage
   - Strong Python SDK
   - Active development
+  - both cloud and local
+  - local is free
 
 - **Alternative Options**
   - Weaviate: Supports hybrid search but requires Docker
   - Milvus: Good hybrid search but deployment is more complex
 
-### Selection Criteria
-1. Data scale requirements
-2. Filtering and query complexity needs
-3. Resource constraints
-4. Programming language preferences
+## Llama Index
+Llama Index provides an ideal framework for implementing vector storage due to:
 
-## Integration Strategy
-
-### Using Llama Index
-Llama Index provides an ideal framework for implementing vector storage in the Claude Desktop plugin due to:
-
-1. **Focused Scope**: Unlike LangChain, Llama Index specializes in data operations and RAG
-2. **Core Features**:
-   - Data ingestion and structuring
-   - Vector store management
-   - Query routing
-   - Built-in evaluation tools
-   - Streaming and async support
+**Core Features**:
+  - Data ingestion and structuring
+  - Vector store management
+  - Query routing
+  - Built-in evaluation tools
+  - Streaming and async support
 
 3. **Vector Store Support**:
 ```python
@@ -97,43 +81,13 @@ query = VectorStoreQuery(query_embedding=[0.1, 0.2, ...])
 results = vector_store.query(query)
 ```
 
-### Key Advantages for Plugin Development
-1. Clean separation between data and LLM operations
-2. Native async support
-3. Modular architecture - can use vector store components independently
-4. Active development and documentation
-5. Built-in batching for performance
-6. Robust metadata filtering support
-7. Strong typing and IDE support
-
-## Implementation Considerations
-
-### Data Flow
-1. Document ingestion
-2. Embedding generation
-3. Vector storage
-4. Similarity search
-5. Result retrieval
-
-### Error Handling
-- Handle connection failures gracefully
-- Implement retry logic for database operations
-- Validate input data before storage
-- Handle missing or corrupt embeddings
-
-### Performance
-- Use batching for bulk operations
-- Implement connection pooling
-- Cache frequently accessed vectors
-- Monitor memory usage
-
-### User Configuration
-- Allow vector store selection
-- Configurable embedding dimensions
-- Adjustable similarity thresholds
-- Persistence options
-
 ## Contextual Retrieval Implementation
+
+https://github.com/anthropics/anthropic-cookbook/blob/main/skills/contextual-embeddings/guide.ipynb
+
+## fastmcp
+
+[python library this MCP server will be built with](https://github.com/jlowin/fastmcp/blob/main/README.md)
 
 ### 1. Document Processing Pipeline
 - Split documents into manageable chunks (few hundred tokens)
@@ -178,16 +132,3 @@ results = vector_store.query(query)
 - Reranking configuration
 - Number of chunks to return (K value)
 - Contextualization prompt template
-
-### Performance Considerations
-- Contextual Embeddings reduce retrieval failure by 35%
-- Combining with Contextual BM25 reduces failure by 49%
-- Adding reranking further reduces failure (up to 67%)
-- Balance between reranking more chunks for accuracy vs. fewer for speed
-
-## Next Steps
-1. Implement basic vector store wrapper using Llama Index
-2. Add configuration options for store selection
-3. Implement error handling and logging
-4. Add performance monitoring
-5. Create user documentation
