@@ -1,0 +1,7 @@
+fastmcp
+cohere
+voyageai
+anthropic
+elasticsearch
+polars
+numpy
