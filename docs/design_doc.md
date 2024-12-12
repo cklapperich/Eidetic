@@ -1,5 +1,14 @@
 # Eidetic - Claude Memory extender
 
+Eidetic is a more than just an MCP server for claude. 
+
+It's:
+1. an entire SOTA RAG server 
+2. an MCP server built on top of that
+
+1st we need to built an awesome configurable SOTA rag server with an API. 
+then we can build a MCP server on top of it.
+
 ## Motivation
 
 I dont like reading files via filesystem and I think the graph memory plugin is bad.
@@ -11,10 +20,17 @@ I want something vector based for 2 purposes:
 2. making a better version of chatgpt "Memory" feature. 
 a. have a 'memory' text document
 b. keep updated - no need to chunk it, , but we can add context
-3. query it automatically with EVERY chat? or at least let claude do 'remember' as a command, which runs the
+c. query it automatically with EVERY chat? or at least let claude do 'remember' as a command, which runs the
 search algo on the memory document. 
 System prompts can encourage it to use memory frequently.
  
+3. Combine with Filesystem MCP server. Allow claude to read the entire file when it finds interesting things.
+need some way to associate chunks with filenames.
+
+4. need a realy good system prompt to tie this all together, like claude's artifacts prompt
+
+5. add a custom contextualizer prompt feature the user can edit
+
 Inspired by: https://www.anthropic.com/news/contextual-retrieval
 and reddit posts asking for an MCP pinecone plugin
 

@@ -1,7 +1,14 @@
-fastmcp
+botocore
 cohere
 voyageai
 anthropic
 elasticsearch
 polars
 numpy
+stemmer
+
+llama_index
+llama_index_core
+llama-index-llms-anthropic
+llama-index-postprocessor-cohere-rerank
+llama-index-retrievers-bm25
