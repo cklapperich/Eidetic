@@ -1,8 +1,8 @@
-from dataclasses import dataclass
-from typing import Optional, Dict, List
+from dataclasses import dataclass, field
+from typing import Optional, Dict, List, Tuple
 from llama_index.core.schema import NodeWithScore, QueryBundle
 
-from llama_index.core import VectorStoreIndex
+from llama_index.core import VectorStoreIndex,SimpleDirectoryReader
 
 from llama_index.core.vector_stores import SimpleVectorStore
 
@@ -10,6 +10,7 @@ from llama_index.core.embeddings import BaseEmbedding
 
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.retrievers.bm25 import BM25Retriever
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.llms import ChatMessage
 from llama_index.core.schema import Document, Node
@@ -17,25 +18,25 @@ from llama_index.core.schema import Document, Node
 import copy
 from datetime import datetime
 from pathlib import Path
-from file_metadata import FileMetadata
 
 @dataclass
 class HybridRetriever(BaseRetriever):
     """Hybrid retriever combining vector search and BM25 with optional reranking and contextual embeddings."""
     
-    vector_store = None
-    embed_model: BaseEmbedding
-    similarity_top_k: int = 2
-    reranker: Optional[BaseRetriever] = None
-    documents: List[FileMetadata] = None # TODO: decide on a document format
-
-    # New fields for context generation
+    vector_store: SimpleVectorStore  = None
+    embed_model: BaseEmbedding = None
     context_llm: Optional[object] = None
-    
-    prompt_document = prompt_document = """\
+    reranker: Optional[BaseRetriever] = None
+
+    similarity_top_k: int = 2
+    documents: dict[str, Document] = field(default_factory=dict)
+    nodes: List[Node] = field(default_factory=list)
+    data_paths: List[Path] = field(default_factory=list)
+
+    prompt_document = """\
 <document>
-{WHOLE_DOCUMENT}
-</document>\
+{WHOLE_DOCUMENT} 
+</document>
 """
 
     prompt_chunk = """\
@@ -43,31 +44,43 @@ Here is the chunk we want to situate within the whole document
 <chunk>
 {CHUNK_CONTENT}
 </chunk>
-Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else.\
+Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else.
 """
 
     context_system_prompt: str = "You are a helpful AI Assistant."
     cached_contextual_nodes: Dict[str, Node] = field(default_factory=dict)
 
-    def add_document_from_filepath(self, filepath:str):
-        """
-        """
-        with open(filepath,'r') as fp:
-            text = fp.read()
+    def add_document(self, document):
+        self.documents[document.doc_id] = document
+        new_nodes = self._create_contextual_nodes_for_document(
+            self.prompt_document, document, self.cached_contextual_nodes
+        )
+
+        # get embeddings for the nodes
+        # simple vector store has no 'add documents'
+        self.vector_store.add(new_nodes)
+
+        # add to the mongodb database - or just the list of nodes for now
+        self.nodes.extend(new_nodes)
         
-        doc = Document(text=text)
 
-        metadata = FileMetadata.from_file_path(filepath, doc_id=doc.doc_id)
+    def load_directory(self, data_path:Path):
+        # document metadata keys:
+        # dict_keys(['file_path', 'file_name', 'file_type', 'file_size', 'creation_date', 'last_modified_date'])
 
-        self.documents.append(metadata)
+        if not isinstance(data_path, Path):
+            data_path = Path(data_path)
 
-        return doc
-
+        if not data_path.exists():
+            raise ValueError(f"Database path {data_path} does not exist.")
+        
+        reader = SimpleDirectoryReader(data_path, filename_as_id=True)
+        new_documents = reader.load_data()
+        self.data_paths.append(data_path)
+        for doc in new_documents:
+            result = self.add_document(doc)
 
     def _create_contextual_nodes_for_document(self, prompt_document, document: Document, nodes: List[Node]) -> List[Node]:
-        """Create contextual nodes using the provided LLM and prompt template.
-            Modifies the nodes and attached a 'context' to the node.metadata
-        """
         if not self.context_llm or not self.context_prompt_template:
             return nodes
 
@@ -94,6 +107,8 @@ Please give a short succinct context to situate this chunk within the overall do
                 ),
             ]
 
+            # by default, filename is the document id
+            # new_node.metadata["filename"] = document.id
             new_node.metadata["context"] = str(
                 self.context_llm.chat(
                     messages,
@@ -173,12 +188,15 @@ Please give a short succinct context to situate this chunk within the overall do
 
 if __name__=='__main__':
     # Create components
-    embed_model = BaseEmbedding()
+    data_path = Path('./data')
+    print(data_path)
+    assert(data_path.exists())
+    
+    embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-    vector_store = SimpleVectorStore(embed_model)
+    vector_store = SimpleVectorStore()
 
     reranker = SentenceTransformerRerank(
-        model_name="cross-encoder/ms-marco-MiniLM-L-6-v2",
         top_n=2
     )
 
@@ -190,4 +208,4 @@ if __name__=='__main__':
         reranker=reranker
     )
 
-    retriever.add_document_from_filepath('../prideandprejudice.txt')
+    retriever.load_directory(data_path)

@@ -12,3 +12,4 @@ llama_index_core
 llama-index-llms-anthropic
 llama-index-postprocessor-cohere-rerank
 llama-index-retrievers-bm25
+pip install llama-index-embeddings-huggingface
