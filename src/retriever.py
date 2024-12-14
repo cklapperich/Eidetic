@@ -1,21 +1,19 @@
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Tuple
 from llama_index.core.schema import NodeWithScore, QueryBundle
-
 from llama_index.core import VectorStoreIndex,SimpleDirectoryReader
-
 from llama_index.core.vector_stores import SimpleVectorStore
-
-from llama_index.core.embeddings import BaseEmbedding
-
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.retrievers.bm25 import BM25Retriever
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.postprocessor import SentenceTransformerRerank
 from llama_index.core.llms import ChatMessage
-from llama_index.core.schema import Document, Node
-
-import copy
+from llama_index.core.schema import Document, Node, TransformComponent
+from llama_index.core.settings import Settings
+from llama_index.core.ingestion import IngestionPipeline
+from llama_index.core.llms.llm import LLM
+from llama_index.core.async_utils import DEFAULT_NUM_WORKERS, run_jobs
+from llama_index.core.extractors import BaseExtractor
 from datetime import datetime
 from pathlib import Path
 
@@ -23,101 +21,12 @@ from pathlib import Path
 class HybridRetriever(BaseRetriever):
     """Hybrid retriever combining vector search and BM25 with optional reranking and contextual embeddings."""
     
-    vector_store: SimpleVectorStore  = None
-    embed_model: BaseEmbedding = None
-    context_llm: Optional[object] = None
+    index: VectorStoreIndex = None
     reranker: Optional[BaseRetriever] = None
 
     similarity_top_k: int = 2
-    documents: dict[str, Document] = field(default_factory=dict)
-    nodes: List[Node] = field(default_factory=list)
-    data_paths: List[Path] = field(default_factory=list)
 
-    prompt_document = """\
-<document>
-{WHOLE_DOCUMENT} 
-</document>
-"""
-
-    prompt_chunk = """\
-Here is the chunk we want to situate within the whole document
-<chunk>
-{CHUNK_CONTENT}
-</chunk>
-Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else.
-"""
-
-    context_system_prompt: str = "You are a helpful AI Assistant."
     cached_contextual_nodes: Dict[str, Node] = field(default_factory=dict)
-
-    def add_document(self, document):
-        self.documents[document.doc_id] = document
-        new_nodes = self._create_contextual_nodes_for_document(
-            self.prompt_document, document, self.cached_contextual_nodes
-        )
-
-        # get embeddings for the nodes
-        # simple vector store has no 'add documents'
-        self.vector_store.add(new_nodes)
-
-        # add to the mongodb database - or just the list of nodes for now
-        self.nodes.extend(new_nodes)
-        
-
-    def load_directory(self, data_path:Path):
-        # document metadata keys:
-        # dict_keys(['file_path', 'file_name', 'file_type', 'file_size', 'creation_date', 'last_modified_date'])
-
-        if not isinstance(data_path, Path):
-            data_path = Path(data_path)
-
-        if not data_path.exists():
-            raise ValueError(f"Database path {data_path} does not exist.")
-        
-        reader = SimpleDirectoryReader(data_path, filename_as_id=True)
-        new_documents = reader.load_data()
-        self.data_paths.append(data_path)
-        for doc in new_documents:
-            result = self.add_document(doc)
-
-    def _create_contextual_nodes_for_document(self, prompt_document, document: Document, nodes: List[Node]) -> List[Node]:
-        if not self.context_llm or not self.context_prompt_template:
-            return nodes
-
-        nodes_modified = []
-        for node in nodes:
-            new_node = copy.deepcopy(node)
-            messages = [
-                ChatMessage(role="system", content="You are helpful AI Assistant."),
-                ChatMessage(
-                    role="user",
-                    content=[
-                        {
-                            "text": prompt_document.format(
-                                WHOLE_DOCUMENT=document.text
-                            ),
-                            "type": "text",
-                            "cache_control": {"type": "ephemeral"},
-                        },
-                        {
-                            "text": self.prompt_chunk.format(CHUNK_CONTENT=node.text),
-                            "type": "text",
-                        },
-                    ],
-                ),
-            ]
-
-            # by default, filename is the document id
-            # new_node.metadata["filename"] = document.id
-            new_node.metadata["context"] = str(
-                self.context_llm.chat(
-                    messages,
-                    extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-                )
-            )
-            nodes_modified.append(new_node)
-
-        return nodes_modified
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieve nodes given query."""
@@ -186,6 +95,110 @@ Please give a short succinct context to situate this chunk within the overall do
             
         return all_nodes[:self.similarity_top_k]
 
+
+class DocumentContextExtractorWithAnthropicCaching(BaseExtractor):
+    """
+    keys: list of keys to add to each node, or a str, if a single key
+    prompts: list of prompts, that matches the list of keys, or a single str
+    """
+    keys: List[str] | str
+    prompts: List[str] | str
+    llm: LLM
+    system_prompt: str
+    documents: dict
+
+    DEFAULT_CONTEXT_PROMPT = """\
+    Here is the chunk we want to situate within the whole document
+    <chunk>
+    {CHUNK_CONTENT}
+    </chunk>
+    Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else."""
+    
+    DEFAULT_KEY = "context"
+
+    def __init__(self, documents:List[Document], keys=None, prompts=None,  llm:LLM = None, num_workers:int=DEFAULT_NUM_WORKERS, **kwargs):
+
+        self.keys = keys or [self.DEFAULT_KEY]
+        self.prompts = prompts or [self.DEFAULT_CONTEXT_PROMPT]
+
+        if isinstance(self.keys, str):
+            self.keys = [self.keys]
+        if isinstance(self.prompts, str):
+            self.prompts = [self.prompts]
+    
+        self.llm = llm or Settings.llm
+        self.num_workers = num_workers
+        self.documents = {}
+
+        for doc in documents:
+            self.documents[doc.doc_id] = doc
+        
+        # TODO: do we need this?? probably not
+        # super().__init__(
+        #     **kwargs,
+        # )
+
+    async def _agenerate_node_context(self, node, metadata, document, prompt, key)->Dict:
+        messages = [
+            # ChatMessage(role="system", content=self.system_prompt),
+            ChatMessage(
+                role="user",
+                content=[
+                    {
+                        "text": self.prompt_document.format(
+                            WHOLE_DOCUMENT=document.text
+                        ),
+                        "type": "text",
+                        "cache_control": {"type": "ephemeral"},
+                    },
+                    {
+                        "text": prompt.format(CHUNK_CONTENT=node.text),
+                        "type": "text",
+                    },
+                ],
+            ),
+        ]
+
+        metadata[key] = str(
+            self.context_llm.chat(
+                messages,
+                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+            )
+        )
+
+        return metadata
+
+    async def aextract(self, nodes) -> List[Dict]:
+        # Extract node-level summary metadata
+        metadata_list: List[Dict] = [{} for _ in nodes]
+        # we need to preserve the order of the nodes, but process the nodes out-of-order
+        metadata_map = {node.node_id: metadata_dict for metadata_dict, node in zip(metadata_list, nodes)}
+
+        # make a mapping of doc id: node
+        doc_id_to_nodes = {}
+        for node in nodes:
+            parent_id = node.source_node.node_id
+            if parent_id not in doc_id_to_nodes:
+                doc_id_to_nodes[parent_id] = []
+            doc_id_to_nodes[parent_id].append(node)
+
+        node_summaries_jobs = []
+        for doc in self.documents: # do this one document at a time for maximum cache efficiency
+            for prompt, key in list(zip(self.prompts, self.keys)):
+                for node in doc_id_to_nodes.get(doc.doc_id,[]):
+                    metadata_dict = metadata_map[node.node_id] # get the correct metadata object
+                    node_summaries_jobs.append(self._agenerate_node_summary(node, metadata_dict, doc, prompt, key))
+
+            # each batch of jobs is 1 single document
+            new_metadata = await run_jobs(
+                node_summaries_jobs,
+                show_progress=self.show_progress,
+                workers=self.num_workers,
+            )
+            # no need to do anything with new_metadata, the list will be in the wrong order, and we're already modifying the metadata list in-place
+
+        return metadata_list
+    
 if __name__=='__main__':
     # Create components
     data_path = Path('./data')
@@ -194,7 +207,18 @@ if __name__=='__main__':
     
     embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
+    Contextualizer = DocumentContextExtractorWithAnthropicCaching()
+    
+    transformations = [Contextualizer]
+
     vector_store = SimpleVectorStore()
+    
+    index = VectorStoreIndex(
+        [], #  empty list of nodes
+        embed_model=embed_model,
+        vector_store=vector_store,
+        transformations=transformations
+    )
 
     reranker = SentenceTransformerRerank(
         top_n=2
@@ -202,10 +226,15 @@ if __name__=='__main__':
 
     # Create hybrid retriever
     retriever = HybridRetriever(
-        vector_store=vector_store,
+        VectorStoreIndex=VectorStoreIndex,
         embed_model=embed_model,
         similarity_top_k=4,
         reranker=reranker
     )
 
     retriever.load_directory(data_path)
+
+    # per-index
+    index = VectorStoreIndex.from_documents(
+        documents, transformations=transformations
+    )
