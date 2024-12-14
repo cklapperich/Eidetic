@@ -96,7 +96,7 @@ class HybridRetriever(BaseRetriever):
         return all_nodes[:self.similarity_top_k]
 
 
-class DocumentContextExtractorWithAnthropicCaching(BaseExtractor):
+class DocumentExtractorWithCaching(BaseExtractor):
     """
     keys: list of keys to add to each node, or a str, if a single key
     prompts: list of prompts, that matches the list of keys, or a single str
@@ -171,7 +171,7 @@ class DocumentContextExtractorWithAnthropicCaching(BaseExtractor):
     async def aextract(self, nodes) -> List[Dict]:
         # Extract node-level summary metadata
         metadata_list: List[Dict] = [{} for _ in nodes]
-        # we need to preserve the order of the nodes, but process the nodes out-of-order
+        # we need to preserve the order of the nodes, but process the nodes uot-of-order
         metadata_map = {node.node_id: metadata_dict for metadata_dict, node in zip(metadata_list, nodes)}
 
         # make a mapping of doc id: node
