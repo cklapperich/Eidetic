@@ -9,13 +9,14 @@ from llama_index.llms.openrouter import OpenRouter
 from llama_index.core.postprocessor import LLMRerank
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 import os
+from llama_index.core.storage.docstore.simple_docstore import SimpleDocumentStore
 
 class HybridSearchWithContext:
     CHUNK_SIZE = 512
     CHUNK_OVERLAP = 50
     SIMILARITY_TOP_K = 10
     SPARSE_TOP_K = 20
-    REREANKER_TOP_N = 2
+    REREANKER_TOP_N = 3
 
     def __init__(self, name:str):
         # Initialize clients
@@ -59,8 +60,8 @@ class HybridSearchWithContext:
             index_store=SimpleIndexStore()
 
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store,
+                                                            docstore=SimpleDocumentStore(),
                                                             index_store=index_store)
-                                                    
 
         # Create text splitter
         self.text_splitter = SentenceSplitter(
@@ -68,13 +69,14 @@ class HybridSearchWithContext:
             chunk_overlap=self.CHUNK_OVERLAP
         )
 
-        self.custom_extractor = DocumentContextExtractor(documents=[], llm=self.context_llm)
+        # DocumentContextExtractor requires a document store
+        self.document_context_extractor = DocumentContextExtractor(docstore=self.storage_context.docstore, llm=self.context_llm)
 
         self.index = VectorStoreIndex.from_vector_store(
             vector_store=self.vector_store,
             embed_model=self.embed_model,
             storage_context=self.storage_context,   
-            transformations=[self.text_splitter, self.custom_extractor]
+            transformations=[self.text_splitter, self.document_context_extractor]
         )
 
         self.storage_context.persist(persist_dir=self.index_store_path)
@@ -82,8 +84,6 @@ class HybridSearchWithContext:
     def add_directory(self, directory):
         reader = SimpleDirectoryReader(directory)
         documents = reader.load_data()
-    
-        self.custom_extractor.set_documents(documents)
 
         for doc in documents:
             self.index.insert(doc)
@@ -106,16 +106,13 @@ class HybridSearchWithContext:
 
     def get_raw_search_results(self, question):
 
-        # This will return the raw nodes without LLM processing
         retrieved_nodes = self.retriever.retrieve(question)
         
-        # If you just want the text content:
         retrieved_texts = [node.text for node in retrieved_nodes]
         
-        return retrieved_nodes  # or retrieved_texts depending on your needs
+        return retrieved_nodes
     
     def query_engine(self, question):
-        # Query
         response = self.query_engine.query(
             question
         )

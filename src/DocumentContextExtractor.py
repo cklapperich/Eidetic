@@ -5,6 +5,7 @@ from llama_index.core.async_utils import DEFAULT_NUM_WORKERS, run_jobs
 from llama_index.core.extractors import BaseExtractor
 from llama_index.core.schema import Document, Node
 from llama_index.core import Settings
+from llama_index.core.storage.docstore.simple_docstore import DocumentStore
 from textwrap import dedent
 
 DEFAULT_CONTEXT_PROMPT: str = dedent("""
@@ -13,7 +14,6 @@ DEFAULT_CONTEXT_PROMPT: str = dedent("""
 
 DEFAULT_KEY: str = "context"
 from llama_index.core.node_parser import TokenTextSplitter
-import warnings
 
 class DocumentContextExtractor(BaseExtractor):
     """
@@ -23,7 +23,7 @@ class DocumentContextExtractor(BaseExtractor):
     keys: List[str]
     prompts: List[str]
     llm: LLM
-    documents: List[Document]
+    docstore:DocumentStore
     doc_ids: Set
     max_context_length:int
     
@@ -32,9 +32,8 @@ class DocumentContextExtractor(BaseExtractor):
         tokens = text_splitter.split_text(document.text)
         return len(tokens)
     
-    def __init__(self, documents: List[Document], keys=None, prompts=None, llm: LLM = None,
+    def __init__(self, docstore:DocumentStore, keys=None, prompts=None, llm: LLM = None,
                  num_workers: int = DEFAULT_NUM_WORKERS, max_context_length:int = 128000,
-                 node_window=None,
                  ignore_context_length_warning=True, **kwargs):
         
         # Process defaults and values first
@@ -54,28 +53,13 @@ class DocumentContextExtractor(BaseExtractor):
             keys=keys,
             prompts=prompts,
             llm=llm,
-            documents=documents,
+            docstore=docstore,
             num_workers=num_workers,
             doc_ids=doc_ids,
             max_context_length=max_context_length,
             **kwargs
         )
 
-    def set_documents(self, documents: List[Document]):
-        for doc in documents:
-            self.doc_ids.add(doc.doc_id)
-            tokens = self._count_document_tokens(doc)
-            if tokens>self.max_context_length:
-                print(tokens)
-                print(self.max_context_length)
-                warnings.warn(f"DocumentExtractorWithCaching Warning: found document with tokens {tokens} greater than max context length ({self.max_context_length}). Filename: {doc.metadata.get('file_name')}")
-                if not self.ignore_context_length_warning:
-                    warnings.warn("Exiting initializer for DocumentExtractorWithCaching. Set ignore_context_length_warning=True to prevent this and allow initialization to continue, or"
-                                  " split your documents into smaller chunks.")
-                    return
-                
-        self.documents = documents
-        
 
     async def _agenerate_node_context(self, node, metadata, document, prompt, key)->Dict:
         
@@ -112,27 +96,29 @@ class DocumentContextExtractor(BaseExtractor):
         # we need to preserve the order of the nodes, but process the nodes uot-of-order
         metadata_map = {node.node_id: metadata_dict for metadata_dict, node in zip(metadata_list, nodes)}
 
+        source_doc_ids = set([node.source_node.node_id for node in nodes])
+
         # make a mapping of doc id: node
         doc_id_to_nodes = {}
         for node in nodes:
-            if not (node.source_node and (node.source_node.node_id in self.doc_ids)):
+            if not (node.source_node and (node.source_node.node_id in source_doc_ids)):
                 continue
             parent_id = node.source_node.node_id
             
             if parent_id not in doc_id_to_nodes:
                 doc_id_to_nodes[parent_id] = []
             doc_id_to_nodes[parent_id].append(node)
+
         i = 0
-        
-        for doc in self.documents: # do this one document at a time for maximum cache efficiency
+        for doc_id in source_doc_ids:
+            doc = await self.docstore.get_document(doc_id)
             node_summaries_jobs = []
             for prompt, key in list(zip(self.prompts, self.keys)):
-                for node in doc_id_to_nodes.get(doc.doc_id,[]):
+                for node in doc_id_to_nodes.get(doc_id,[]):
                     i += 1
-                    metadata_dict = metadata_map[node.node_id] # get the correct metadata object
+                    metadata_dict = metadata_map[node.node_id]
                     node_summaries_jobs.append(self._agenerate_node_context(node, metadata_dict, doc, prompt, key))
-                    # await self._agenerate_node_context(node, metadata_dict, doc, prompt, key)
-                    # node_summaries_jobs.append(self._agenerate_node_context(node, metadata_dict, doc, prompt, key))
+
             new_metadata = await run_jobs(
                 node_summaries_jobs,
                 show_progress=self.show_progress,
