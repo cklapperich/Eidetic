@@ -2,7 +2,7 @@
 
 ## Summary
 
-This repository contains a llama_index implementaton of "contextual retrieval" (https://www.anthropic.com/news/contextual-retrieval)
+This repository contains a llama_index implementation of "contextual retrieval" (https://www.anthropic.com/news/contextual-retrieval)
 
 It implements a custom llama_index Extractor class, which can then be used in a llama index pipeline. It requires you to initialize it using a Document Store and an LLM to provide the context. It also requires you keep the documentstore up to date. 
 
