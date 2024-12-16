@@ -63,6 +63,7 @@ class DocumentContextExtractor(BaseExtractor):
             num_workers=num_workers,
             doc_ids=doc_ids,
             max_context_length=max_context_length,
+            ignore_context_length_warning=ignore_context_length_warning,
             **kwargs
         )
 
