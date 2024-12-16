@@ -1,10 +1,15 @@
 # Document Context Retrieval
 
 ## Summary
+
 This repository contains the code from the anthropic blog post "contextual retrieval" (https://www.anthropic.com/news/contextual-retrieval)
 
 it implements a custom llama_index Extractor class, which requires you to initialize it using a Document Store and an LLM to provide the context.
 it also requires you keep the documentstore up to date. 
+
+## Demo
+
+see hybridsearchdemo.py for a demo of the extractor in action with hybrid search, effectively re-ikmplementing the blog post.
 
 ## Usage
 
@@ -65,7 +70,3 @@ Keep in mind input costs add up really fast with large documents.
 - detect rate limits and retry with exponential backoff
 - handle oversized docs better - split them up into chunks automatically, maybe?
 - docstrings
-
-## Demo
-
-see hybridsearchdemo.py for a demo of the extractor in action with hybrid search, effectively re-ikmplementing the blog post.
