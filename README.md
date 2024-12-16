@@ -8,7 +8,7 @@ It implements a custom llama_index Extractor class, which can then be used in a 
 
 ## Demo
 
-See hybridsearchdemo.py for a demo of the extractor in action with hybrid search, effectively re-ikmplementing the blog post.
+See hybridsearchdemo.py for a demo of the extractor in action with Qdrant hybrid search, effectively re-implementing the blog post.
 
 ## Usage
 
