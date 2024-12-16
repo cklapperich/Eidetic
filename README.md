@@ -41,8 +41,7 @@ for doc in documents:
 
 ### custom keys and prompts
 
-by default, the extractor adds a key called "context" to the document, and has a reasonable default prompt taken from the blog post, 
-but you can pass in a list of keys and prompts like so:
+by default, the extractor adds a key called "context" to each node, using a reasonable default prompt taken from the blog post cookbook, but you can pass in a list of keys and prompts like so:
 
 ```python
 extractor = DocumentContextExtractor(document_store, llm, keys=["context", "title"], prompts=["Give the document context", "Provide a chunk title"])
