@@ -20,6 +20,9 @@ class HybridSearchWithContext:
     REREANKER_TOP_N = 3
 
     def __init__(self, name:str):
+        """
+        :param name: The name of the index, required for the underlying vector store
+        """
         # Initialize clients
         client = QdrantClient(":memory:")
         aclient = AsyncQdrantClient(":memory:")

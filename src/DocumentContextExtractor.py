@@ -16,10 +16,6 @@ DEFAULT_KEY: str = "context"
 from llama_index.core.node_parser import TokenTextSplitter
 
 class DocumentContextExtractor(BaseExtractor):
-    """
-    keys: list of keys to add to each node, or a str, if a single key
-    prompts: list of prompts, that matches the list of keys, or a single str
-    """
     keys: List[str]
     prompts: List[str]
     llm: LLM
@@ -35,7 +31,17 @@ class DocumentContextExtractor(BaseExtractor):
     def __init__(self, docstore:DocumentStore, keys=None, prompts=None, llm: LLM = None,
                  num_workers: int = DEFAULT_NUM_WORKERS, max_context_length:int = 128000,
                  ignore_context_length_warning=True, **kwargs):
-        
+        """
+        Args:
+            docstore (DocumentStore): DocumentStore to extract from
+            keys (List[str]): List of keys to extract context for
+            prompts (List[str]): List of prompts to use for context extraction
+            llm (LLM): LLM to use for context extraction
+            num_workers (int): Number of workers to use for context extraction
+            max_context_length (int): Maximum context length to use for context extraction
+            ignore_context_length_warning (bool): Whether to ignore context length warning UNIMPLEMENTED
+            **kwargs: Additional keyword arguments based to BaseExtractor
+        """
         # Process defaults and values first
         keys = keys or [DEFAULT_KEY]
         prompts = prompts or [DEFAULT_CONTEXT_PROMPT]
@@ -62,6 +68,19 @@ class DocumentContextExtractor(BaseExtractor):
 
 
     async def _agenerate_node_context(self, node, metadata, document, prompt, key)->Dict:
+        """
+        Generate node context using the provided LLM.
+
+        Args:
+            node (Node): The node to generate context for.
+            metadata (Dict): The metadata dictionary to update.
+            document (Document): The document containing the node.
+            prompt (str): The prompt to use for generating context.
+            key (str): The key to use for storing the generated context.
+
+        Returns:
+            Dict: The updated metadata dictionary.
+        """
         
         cached_text = f"<document>{document.text}</document>"
 

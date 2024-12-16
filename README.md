@@ -68,4 +68,5 @@ Keep in mind input costs add up really fast with large documents.
 
 - detect rate limits and retry with exponential backoff
 - handle oversized docs better - split them up into chunks automatically, maybe?
+- re-implement the warning for oversized docs
 - docstrings
