@@ -2,3 +2,4 @@
 hybriddemo
 *.pyc
 __pycache__
+.devcontainer

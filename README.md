@@ -72,4 +72,6 @@ Keep in mind input costs add up really fast with large documents.
 - add a TransformComponent that splits documents into smaller documents and then adds them to the docstore
     - or better yet, a TransformComponent that simply adds the nodes to the docstore and does nothing else
     - then you can build a pipeline like this: ChapterSplitter -> DocstoreCatcher -> SentenceSplitter -> DocumentContextExtractor
-    
+- make this an installable package
+- make this into an MCP server
+- make a pull request to llama_index ?
