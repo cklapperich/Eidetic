@@ -2,14 +2,13 @@
 
 ## Summary
 
-This repository contains the code from the anthropic blog post "contextual retrieval" (https://www.anthropic.com/news/contextual-retrieval)
+This repository contains a llama_index implementaton of "contextual retrieval" (https://www.anthropic.com/news/contextual-retrieval)
 
-it implements a custom llama_index Extractor class, which requires you to initialize it using a Document Store and an LLM to provide the context.
-it also requires you keep the documentstore up to date. 
+It implements a custom llama_index Extractor class, which can then be used in a llama index pipeline. It requires you to initialize it using a Document Store and an LLM to provide the context. It also requires you keep the documentstore up to date. 
 
 ## Demo
 
-see hybridsearchdemo.py for a demo of the extractor in action with hybrid search, effectively re-ikmplementing the blog post.
+See hybridsearchdemo.py for a demo of the extractor in action with hybrid search, effectively re-ikmplementing the blog post.
 
 ## Usage
 
