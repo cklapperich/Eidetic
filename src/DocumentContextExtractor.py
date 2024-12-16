@@ -111,7 +111,7 @@ class DocumentContextExtractor(BaseExtractor):
 
         i = 0
         for doc_id in source_doc_ids:
-            doc = await self.docstore.get_document(doc_id)
+            doc = self.docstore.get_document(doc_id)
             node_summaries_jobs = []
             for prompt, key in list(zip(self.prompts, self.keys)):
                 for node in doc_id_to_nodes.get(doc_id,[]):

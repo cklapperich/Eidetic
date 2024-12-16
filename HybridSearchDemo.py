@@ -2,15 +2,16 @@ from llama_index.core import VectorStoreIndex, StorageContext, Settings
 from llama_index.core.storage.index_store.simple_index_store import SimpleIndexStore
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, AsyncQdrantClient
-from DocumentContextExtractor import DocumentContextExtractor
+
 from llama_index.core import SimpleDirectoryReader
-from llama_index.core.node_parser import SentenceSplitter  # or another splitter of your choice
+from llama_index.core.node_parser import SentenceSplitter
 from llama_index.llms.openrouter import OpenRouter
 from llama_index.core.postprocessor import LLMRerank
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-import os
 from llama_index.core.storage.docstore.simple_docstore import SimpleDocumentStore
 
+import os
+from src.DocumentContextExtractor import DocumentContextExtractor
 class HybridSearchWithContext:
     CHUNK_SIZE = 512
     CHUNK_OVERLAP = 50
@@ -85,6 +86,7 @@ class HybridSearchWithContext:
         reader = SimpleDirectoryReader(directory)
         documents = reader.load_data()
 
+        self.storage_context.docstore.add_documents(documents)
         for doc in documents:
             self.index.insert(doc)
 
