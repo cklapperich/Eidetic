@@ -10,10 +10,14 @@ python-dotenv
 
 llama_index
 llama_index_core
-llama-index-llms-anthropic
-llama-index-postprocessor-cohere-rerank
-llama-index-retrievers-bm25
+
 llama-index-embeddings-huggingface
 llama-index-llms-openrouter
 llama-index-vector-stores-qdrant
+llama-index-embeddings-nvidia
+
+llama-index-llms-anthropic
+llama-index-postprocessor-cohere-rerank
+llama-index-retrievers-bm25
+
 fastembed
