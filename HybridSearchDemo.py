@@ -63,7 +63,6 @@ class HybridSearchWithContext:
             index_store=SimpleIndexStore()
 
         self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store,
-                                                            docstore=SimpleDocumentStore(),
                                                             index_store=index_store)
 
         # Create text splitter
